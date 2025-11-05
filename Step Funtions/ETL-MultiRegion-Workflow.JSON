@@ -1,0 +1,86 @@
+{
+  "Comment": "Multi-region ETL with S3 integration",
+  "StartAt": "ListRegionalFiles",
+  "States": {
+    "ListRegionalFiles": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "ListRegionalFilesLambda"
+      },
+      "ResultSelector": {
+        "regions.$": "$.Payload.regions"
+      },
+      "Next": "ProcessRegions"
+    },
+    "ProcessRegions": {
+      "Type": "Map",
+      "ItemsPath": "$.regions",
+      "Parameters": {
+        "region.$": "$$.Map.Item.Value.region",
+        "file.$": "$$.Map.Item.Value.file"
+      },
+      "Iterator": {
+        "StartAt": "ValidateData",
+        "States": {
+          "ValidateData": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "ValidateDataLambda",
+              "Payload.$": "$"
+            },
+            "Next": "TransformData"
+          },
+          "TransformData": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "TransformDataLambda",
+              "Payload.$": "$.Payload"
+            },
+            "Next": "LoadToS3"
+          },
+          "LoadToS3": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "LoadToS3Lambda",
+              "Payload.$": "$.Payload"
+            },
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.results",
+      "Next": "AggregateResults"
+    },
+    "AggregateResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "AggregateResultsLambda",
+        "Payload.$": "$"
+      },
+      "Next": "GenerateReport"
+    },
+    "GenerateReport": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "GenerateReportLambda",
+        "Payload.$": "$.Payload"
+      },
+      "Next": "SendNotification"
+    },
+    "SendNotification": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "SendNotificationLambda",
+        "Payload.$": "$.Payload"
+      },
+      "End": true
+    }
+  }
+}

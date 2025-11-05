@@ -1,0 +1,120 @@
+{
+  "Comment": "ETL Step Function with Lambda integration",
+  "StartAt": "Validate",
+  "States": {
+    "Validate": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "ResultPath": "$.validation",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:973516475030:function:validatelambda:$LATEST",
+        "Payload": {
+          "bucket.$": "$.bucket",
+          "key.$": "$.key"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "GetSecret"
+    },
+    "GetSecret": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "ResultPath": "$.dbSecret",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:973516475030:function:GetDBSecretLambda:$LATEST",
+        "Payload": {}
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Transform"
+    },
+    "Transform": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "ResultPath": "$.transform",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:973516475030:function:TransformLambda:$LATEST",
+        "Payload": {
+          "bucket.$": "$.validation.Payload.bucket",
+          "key.$": "$.validation.Payload.key"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "LoadToDB"
+    },
+    "LoadToDB": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "ResultPath": "$.load",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:973516475030:function:LoadToDBLambda:$LATEST",
+        "Payload": {
+          "bucket.$": "$.transform.Payload.bucket",
+          "processed_key.$": "$.transform.Payload.processed_key",
+          "dbSecret.$": "$.dbSecret.Payload"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Notify"
+    },
+    "Notify": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:973516475030:function:NotifyLambda:$LATEST",
+        "Payload": {
+          "pipelineResult.$": "$"
+        }
+      },
+      "End": true
+    }
+  },
+  "QueryLanguage": "JSONPath"
+}
